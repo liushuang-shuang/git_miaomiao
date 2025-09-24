@@ -31,6 +31,8 @@ tags:
   - name: Attachments
   - name: Comments
   - name: Notifications
+  - name: BDMessages
+  - name: BDEvents
   - name: Webhooks
   - name: Audit
   - name: Health
@@ -98,6 +100,94 @@ components:
     ValidationFailed:
       description: 校验失败
   schemas:
+    ServiceProviderType:
+      type: string
+      enum: [KA, ISV, Sales]
+    ChangeCategory:
+      type: string
+      description: 变更归类，用于展示和Push模板
+      enum: [performance_impact, applicability, selling]
+    ChangeImportance:
+      type: string
+      description: 重要程度
+      enum: [P0, P1, P2]
+    ChangeStatus:
+      type: string
+      description: |
+        审核状态映射：
+        - reviewing: 内容安全审核中 或 运营审核中
+        - rejected: 内容安全审核不通过 或 运营审核不通过
+        - changed: 运营审核通过 或 内容安全审核通过且无需运营审核
+      enum: [reviewing, changed, rejected]
+    StoreRef:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        name: { type: string }
+    ProductChangeFieldDiff:
+      type: object
+      description: 单字段变更详情
+      properties:
+        fieldCode: { type: string }
+        fieldLabel: { type: string }
+        category: { $ref: '#/components/schemas/ChangeCategory' }
+        importance: { $ref: '#/components/schemas/ChangeImportance' }
+        valueType: { type: string, enum: [string, number, boolean, object, store_scope, on_shelf] }
+        before: { oneOf: [{ type: string }, { type: number }, { type: boolean }, { type: object }] }
+        after: { oneOf: [{ type: string }, { type: number }, { type: boolean }, { type: object }] }
+        note: { type: string, description: 展示用说明（如“全部门店(100)”） }
+    ProductChangeMessage:
+      type: object
+      description: 列表项预览卡片数据
+      required: [id, merchantName, productNameBefore, importance, status, submittedAt]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        merchantId: { $ref: '#/components/schemas/UUID' }
+        merchantName: { type: string }
+        productId: { $ref: '#/components/schemas/UUID' }
+        productNameBefore: { type: string }
+        category: { $ref: '#/components/schemas/ChangeCategory' }
+        importance: { $ref: '#/components/schemas/ChangeImportance' }
+        status: { $ref: '#/components/schemas/ChangeStatus' }
+        submittedAt: { $ref: '#/components/schemas/DateTime' }
+        highlightedField: { $ref: '#/components/schemas/ProductChangeFieldDiff' }
+        fieldCount: { type: integer }
+    ProductChangeDetail:
+      type: object
+      description: 变更详情
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        status: { $ref: '#/components/schemas/ChangeStatus' }
+        reviewerName: { type: string }
+        reviewerEmployeeId: { type: string }
+        reviewTime: { $ref: '#/components/schemas/DateTime' }
+        submittedAt: { $ref: '#/components/schemas/DateTime' }
+        merchantId: { $ref: '#/components/schemas/UUID' }
+        merchantName: { type: string }
+        productId: { $ref: '#/components/schemas/UUID' }
+        productNameBefore: { type: string }
+        category: { $ref: '#/components/schemas/ChangeCategory' }
+        importance: { $ref: '#/components/schemas/ChangeImportance' }
+        involvedStoresBeforeCount: { type: integer }
+        involvedStoresEffectiveCount: { type: integer }
+        fields: { type: array, items: { $ref: '#/components/schemas/ProductChangeFieldDiff' } }
+    BadgeCount:
+      type: object
+      properties:
+        key: { type: string }
+        parent: { type: string }
+        count: { type: integer }
+        showNumber: { type: boolean }
+    BadgeResponse:
+      type: object
+      properties:
+        entrance: { type: integer, description: 入口总红点计数，>99时前端显示99+ }
+        level1:
+          type: array
+          items: { $ref: '#/components/schemas/BadgeCount' }
+        level2:
+          type: array
+          items: { $ref: '#/components/schemas/BadgeCount' }
     UUID:
       type: string
       format: uuid
@@ -294,6 +384,193 @@ components:
         createdAt: { $ref: '#/components/schemas/DateTime' }
 
 paths:
+  /bd/messages/changes:
+    get:
+      tags: [BDMessages]
+      summary: 商品变更信息列表
+      description: |
+        - 默认排序：submittedAt desc
+        - 仅“全部”tab支持搜索与筛选
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ChangeCategory' }
+          description: 变更归类（影响绩效/适用相关/售卖相关）
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ChangeStatus' }
+        - name: datePreset
+          in: query
+          required: false
+          schema: { type: string, enum: [all, today, this_week, this_month, custom], default: all }
+        - name: dateFrom
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: dateTo
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: merchantName
+          in: query
+          required: false
+          schema: { type: string }
+          description: 商家名称模糊搜索（仅全部tab生效）
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/ProductChangeMessage' } }
+
+  /bd/messages/changes/{id}:
+    get:
+      tags: [BDMessages]
+      summary: 变更详情
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductChangeDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /bd/messages/changes/{id}/read:
+    post:
+      tags: [BDMessages]
+      summary: 标记消息为已读
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '204': { description: 已读 }
+
+  /bd/messages/badges:
+    get:
+      tags: [BDMessages]
+      summary: 红点统计
+      description: 返回入口、一级/二级tab的红点计数
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BadgeResponse' }
+
+  /bd/messages/stores:
+    get:
+      tags: [BDMessages]
+      summary: 门店清单快照
+      parameters:
+        - name: changeId
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+        - name: phase
+          in: query
+          required: true
+          schema: { type: string, enum: [before, effective] }
+          description: before=变更前，effective=变更生效时
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/StoreRef' } }
+
+  /bd/messages/config/field-importance:
+    get:
+      tags: [BDMessages]
+      summary: 变更字段重要程度配置
+      description: 来自运营配置/表格的字段重要度与归类映射
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    fieldCode: { type: string }
+                    fieldLabel: { type: string }
+                    category: { $ref: '#/components/schemas/ChangeCategory' }
+                    importance: { $ref: '#/components/schemas/ChangeImportance' }
+
+  /events/product-change:
+    post:
+      tags: [BDEvents]
+      summary: 入站商品变更事件（Webhook）
+      security:
+        - webhookSig: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventId, eventType, productId, merchantId, submittedAt]
+              properties:
+                eventId: { type: string }
+                eventType:
+                  type: string
+                  enum: [submitted, content_review_passed, content_review_failed, ops_review_passed, ops_review_failed, auto_effective]
+                merchantId: { $ref: '#/components/schemas/UUID' }
+                merchantName: { type: string }
+                productId: { $ref: '#/components/schemas/UUID' }
+                productNameBefore: { type: string }
+                submittedAt: { $ref: '#/components/schemas/DateTime' }
+                serviceProviderType: { $ref: '#/components/schemas/ServiceProviderType' }
+                fields:
+                  type: array
+                  items: { $ref: '#/components/schemas/ProductChangeFieldDiff' }
+            examples:
+              submit:
+                value:
+                  eventId: ev_123
+                  eventType: submitted
+                  merchantId: "b5f2b5b1-1111-2222-3333-444444444444"
+                  merchantName: "示例商家"
+                  productId: "a1b2c3d4-1111-2222-3333-555555555555"
+                  productNameBefore: "原商品名"
+                  submittedAt: "2025-09-24T10:20:00Z"
+                  serviceProviderType: KA
+                  fields:
+                    - fieldCode: store_scope
+                      fieldLabel: 可用门店
+                      category: applicability
+                      importance: P1
+                      valueType: store_scope
+                      before: { total: 100, type: "all" }
+                      after: { total: 20, type: "partial" }
+                      note: "全部门店(100) -> 部分门店(20)"
+      responses:
+        '202':
+          description: 已接收，将异步处理
   /auth/login:
     post:
       tags: [Auth]
