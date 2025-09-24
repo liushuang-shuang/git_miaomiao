@@ -1,0 +1,1302 @@
+openapi: 3.1.0
+info:
+  title: MyOAS 应用层 API
+  version: 0.1.0
+  description: |
+    面向应用层的统一接口，覆盖认证、多租户、组织用户、表单、流程、
+    审批请求、任务、附件、评论、通知、Webhook、审计与健康检查等模块。
+    注意：本方案为通用设计模板，需按产品方案进行裁剪与对齐。
+
+servers:
+  - url: https://api.example.com
+    description: 生产环境
+  - url: https://staging-api.example.com
+    description: 预发布环境
+
+security:
+  - bearerAuth: []
+  - tenantHeader: []
+
+tags:
+  - name: Auth
+  - name: Tenants
+  - name: Orgs
+  - name: Users
+  - name: Roles
+  - name: Dictionaries
+  - name: Forms
+  - name: Processes
+  - name: Requests
+  - name: Tasks
+  - name: Attachments
+  - name: Comments
+  - name: Notifications
+  - name: BDMessages
+  - name: BDEvents
+  - name: Webhooks
+  - name: Audit
+  - name: Health
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    tenantHeader:
+      type: apiKey
+      in: header
+      name: X-Tenant-Id
+    webhookSig:
+      type: apiKey
+      in: header
+      name: X-Webhook-Signature
+  parameters:
+    XTenantId:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema: { type: string }
+      description: 当前请求的租户标识
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string }
+      description: 幂等键，用于防重
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+      description: 页码，从1开始
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+      description: 每页数量
+    Sort:
+      name: sort
+      in: query
+      schema: { type: string }
+      description: 排序表达式，如 createdAt:desc,name:asc
+    Q:
+      name: q
+      in: query
+      schema: { type: string }
+      description: 关键词搜索
+  responses:
+    Error:
+      description: 标准错误响应
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: 未认证
+    Forbidden:
+      description: 无权限
+    NotFound:
+      description: 资源不存在
+    ValidationFailed:
+      description: 校验失败
+  schemas:
+    ServiceProviderType:
+      type: string
+      enum: [KA, ISV, Sales]
+    ChangeCategory:
+      type: string
+      description: 变更归类，用于展示和Push模板
+      enum: [performance_impact, applicability, selling]
+    ChangeImportance:
+      type: string
+      description: 重要程度
+      enum: [P0, P1, P2]
+    ChangeStatus:
+      type: string
+      description: |
+        审核状态映射：
+        - reviewing: 内容安全审核中 或 运营审核中
+        - rejected: 内容安全审核不通过 或 运营审核不通过
+        - changed: 运营审核通过 或 内容安全审核通过且无需运营审核
+      enum: [reviewing, changed, rejected]
+    StoreRef:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        name: { type: string }
+    ProductChangeFieldDiff:
+      type: object
+      description: 单字段变更详情
+      properties:
+        fieldCode: { type: string }
+        fieldLabel: { type: string }
+        category: { $ref: '#/components/schemas/ChangeCategory' }
+        importance: { $ref: '#/components/schemas/ChangeImportance' }
+        valueType: { type: string, enum: [string, number, boolean, object, store_scope, on_shelf] }
+        before: { oneOf: [{ type: string }, { type: number }, { type: boolean }, { type: object }] }
+        after: { oneOf: [{ type: string }, { type: number }, { type: boolean }, { type: object }] }
+        note: { type: string, description: 展示用说明（如“全部门店(100)”） }
+    ProductChangeMessage:
+      type: object
+      description: 列表项预览卡片数据
+      required: [id, merchantName, productNameBefore, importance, status, submittedAt]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        merchantId: { $ref: '#/components/schemas/UUID' }
+        merchantName: { type: string }
+        productId: { $ref: '#/components/schemas/UUID' }
+        productNameBefore: { type: string }
+        category: { $ref: '#/components/schemas/ChangeCategory' }
+        importance: { $ref: '#/components/schemas/ChangeImportance' }
+        status: { $ref: '#/components/schemas/ChangeStatus' }
+        submittedAt: { $ref: '#/components/schemas/DateTime' }
+        highlightedField: { $ref: '#/components/schemas/ProductChangeFieldDiff' }
+        fieldCount: { type: integer }
+    ProductChangeDetail:
+      type: object
+      description: 变更详情
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        status: { $ref: '#/components/schemas/ChangeStatus' }
+        reviewerName: { type: string }
+        reviewerEmployeeId: { type: string }
+        reviewTime: { $ref: '#/components/schemas/DateTime' }
+        submittedAt: { $ref: '#/components/schemas/DateTime' }
+        merchantId: { $ref: '#/components/schemas/UUID' }
+        merchantName: { type: string }
+        productId: { $ref: '#/components/schemas/UUID' }
+        productNameBefore: { type: string }
+        category: { $ref: '#/components/schemas/ChangeCategory' }
+        importance: { $ref: '#/components/schemas/ChangeImportance' }
+        involvedStoresBeforeCount: { type: integer }
+        involvedStoresEffectiveCount: { type: integer }
+        fields: { type: array, items: { $ref: '#/components/schemas/ProductChangeFieldDiff' } }
+    BadgeCount:
+      type: object
+      properties:
+        key: { type: string }
+        parent: { type: string }
+        count: { type: integer }
+        showNumber: { type: boolean }
+    BadgeResponse:
+      type: object
+      properties:
+        entrance: { type: integer, description: 入口总红点计数，>99时前端显示99+ }
+        level1:
+          type: array
+          items: { $ref: '#/components/schemas/BadgeCount' }
+        level2:
+          type: array
+          items: { $ref: '#/components/schemas/BadgeCount' }
+    UUID:
+      type: string
+      format: uuid
+    DateTime:
+      type: string
+      format: date-time
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, description: 业务错误码，如 USER_NOT_FOUND }
+        message: { type: string, description: 人类可读信息 }
+        messageKey: { type: string, description: i18n key，可选 }
+        details: { type: object, additionalProperties: true }
+        requestId: { type: string }
+    PageMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    Page:
+      type: object
+      properties:
+        data: { type: array, items: { type: object } }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    Tenant:
+      type: object
+      required: [id, name]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        name: { type: string }
+        status: { type: string, enum: [active, suspended] }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    Department:
+      type: object
+      required: [id, name]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        parentId: { $ref: '#/components/schemas/UUID' }
+        name: { type: string }
+        path: { type: string, description: 组织路径编码 }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    Role:
+      type: object
+      required: [id, name]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        name: { type: string }
+        permissions: { type: array, items: { type: string } }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    User:
+      type: object
+      required: [id, username, displayName]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        username: { type: string }
+        displayName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        departmentId: { $ref: '#/components/schemas/UUID' }
+        roleIds: { type: array, items: { $ref: '#/components/schemas/UUID' } }
+        status: { type: string, enum: [active, disabled] }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    DictionaryItem:
+      type: object
+      required: [code, label]
+      properties:
+        code: { type: string }
+        label: { type: string }
+        value: { oneOf: [{ type: string }, { type: number }, { type: boolean }] }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/DictionaryItem' }
+    FormField:
+      type: object
+      required: [id, type, label]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [text, textarea, number, select, date, datetime, user, department, attachment] }
+        label: { type: string }
+        required: { type: boolean }
+        options: { type: object, additionalProperties: true }
+    Form:
+      type: object
+      required: [id, name, fields]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        name: { type: string }
+        version: { type: integer }
+        status: { type: string, enum: [draft, published, archived] }
+        fields: { type: array, items: { $ref: '#/components/schemas/FormField' } }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    ProcessNode:
+      type: object
+      required: [id, type]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [start, task, gateway, end] }
+        assigneeRule: { type: object, additionalProperties: true }
+        conditions: { type: array, items: { type: object } }
+    ProcessDefinition:
+      type: object
+      required: [key, name]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        version: { type: integer }
+        formId: { $ref: '#/components/schemas/UUID' }
+        nodes: { type: array, items: { $ref: '#/components/schemas/ProcessNode' } }
+        status: { type: string, enum: [draft, published, archived] }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    Attachment:
+      type: object
+      required: [id, name, url]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        name: { type: string }
+        url: { type: string, format: uri }
+        size: { type: integer }
+        contentType: { type: string }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    Comment:
+      type: object
+      required: [id, authorId, content]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        authorId: { $ref: '#/components/schemas/UUID' }
+        content: { type: string }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    Request:
+      type: object
+      required: [id, processKey, status]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        processKey: { type: string }
+        title: { type: string }
+        formId: { $ref: '#/components/schemas/UUID' }
+        formData: { type: object, additionalProperties: true }
+        status: { type: string, enum: [draft, submitted, in_progress, approved, rejected, cancelled] }
+        applicantId: { $ref: '#/components/schemas/UUID' }
+        currentTaskIds: { type: array, items: { $ref: '#/components/schemas/UUID' } }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    Task:
+      type: object
+      required: [id, requestId, status]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        requestId: { $ref: '#/components/schemas/UUID' }
+        nodeId: { type: string }
+        assigneeId: { $ref: '#/components/schemas/UUID' }
+        candidateIds: { type: array, items: { $ref: '#/components/schemas/UUID' } }
+        status: { type: string, enum: [pending, claimed, completed, rejected, transferred] }
+        dueAt: { $ref: '#/components/schemas/DateTime' }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    Notification:
+      type: object
+      required: [id, type, status]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        type: { type: string, enum: [task_assigned, request_approved, request_rejected] }
+        status: { type: string, enum: [unread, read] }
+        title: { type: string }
+        content: { type: string }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    Webhook:
+      type: object
+      required: [id, url, events]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        url: { type: string, format: uri }
+        events: { type: array, items: { type: string, enum: [request.created, task.assigned, task.completed, request.approved, request.rejected] } }
+        status: { type: string, enum: [active, disabled] }
+        secret: { type: string }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    AuditLog:
+      type: object
+      required: [id, actorId, action, target]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        actorId: { $ref: '#/components/schemas/UUID' }
+        action: { type: string }
+        target: { type: string }
+        payload: { type: object, additionalProperties: true }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+
+paths:
+  /bd/messages/changes:
+    get:
+      tags: [BDMessages]
+      summary: 商品变更信息列表
+      description: |
+        - 默认排序：submittedAt desc
+        - 仅“全部”tab支持搜索与筛选
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ChangeCategory' }
+          description: 变更归类（影响绩效/适用相关/售卖相关）
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ChangeStatus' }
+        - name: datePreset
+          in: query
+          required: false
+          schema: { type: string, enum: [all, today, this_week, this_month, custom], default: all }
+        - name: dateFrom
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: dateTo
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: merchantName
+          in: query
+          required: false
+          schema: { type: string }
+          description: 商家名称模糊搜索（仅全部tab生效）
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/ProductChangeMessage' } }
+
+  /bd/messages/changes/{id}:
+    get:
+      tags: [BDMessages]
+      summary: 变更详情
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductChangeDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /bd/messages/changes/{id}/read:
+    post:
+      tags: [BDMessages]
+      summary: 标记消息为已读
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '204': { description: 已读 }
+
+  /bd/messages/badges:
+    get:
+      tags: [BDMessages]
+      summary: 红点统计
+      description: 返回入口、一级/二级tab的红点计数
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BadgeResponse' }
+
+  /bd/messages/stores:
+    get:
+      tags: [BDMessages]
+      summary: 门店清单快照
+      parameters:
+        - name: changeId
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+        - name: phase
+          in: query
+          required: true
+          schema: { type: string, enum: [before, effective] }
+          description: before=变更前，effective=变更生效时
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/StoreRef' } }
+
+  /bd/messages/config/field-importance:
+    get:
+      tags: [BDMessages]
+      summary: 变更字段重要程度配置
+      description: 来自运营配置/表格的字段重要度与归类映射
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    fieldCode: { type: string }
+                    fieldLabel: { type: string }
+                    category: { $ref: '#/components/schemas/ChangeCategory' }
+                    importance: { $ref: '#/components/schemas/ChangeImportance' }
+
+  /events/product-change:
+    post:
+      tags: [BDEvents]
+      summary: 入站商品变更事件（Webhook）
+      security:
+        - webhookSig: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventId, eventType, productId, merchantId, submittedAt]
+              properties:
+                eventId: { type: string }
+                eventType:
+                  type: string
+                  enum: [submitted, content_review_passed, content_review_failed, ops_review_passed, ops_review_failed, auto_effective]
+                merchantId: { $ref: '#/components/schemas/UUID' }
+                merchantName: { type: string }
+                productId: { $ref: '#/components/schemas/UUID' }
+                productNameBefore: { type: string }
+                submittedAt: { $ref: '#/components/schemas/DateTime' }
+                serviceProviderType: { $ref: '#/components/schemas/ServiceProviderType' }
+                fields:
+                  type: array
+                  items: { $ref: '#/components/schemas/ProductChangeFieldDiff' }
+            examples:
+              submit:
+                value:
+                  eventId: ev_123
+                  eventType: submitted
+                  merchantId: "b5f2b5b1-1111-2222-3333-444444444444"
+                  merchantName: "示例商家"
+                  productId: "a1b2c3d4-1111-2222-3333-555555555555"
+                  productNameBefore: "原商品名"
+                  submittedAt: "2025-09-24T10:20:00Z"
+                  serviceProviderType: KA
+                  fields:
+                    - fieldCode: store_scope
+                      fieldLabel: 可用门店
+                      category: applicability
+                      importance: P1
+                      valueType: store_scope
+                      before: { total: 100, type: "all" }
+                      after: { total: 20, type: "partial" }
+                      note: "全部门店(100) -> 部分门店(20)"
+      responses:
+        '202':
+          description: 已接收，将异步处理
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: 用户名密码登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+            examples:
+              default:
+                value: { username: admin, password: 'Passw0rd!' }
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+                  expiresIn: { type: integer }
+              examples:
+                default:
+                  value: { accessToken: 'jwt...', refreshToken: 'rt...', expiresIn: 3600 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: 刷新令牌
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  expiresIn: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: 注销
+      responses:
+        '204': { description: 成功 }
+
+  /tenants:
+    get:
+      tags: [Tenants]
+      summary: 租户列表
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' } ]
+    
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Tenant' } }
+    post:
+      tags: [Tenants]
+      summary: 创建租户
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tenant' }
+
+  /org/departments:
+    get:
+      tags: [Orgs]
+      summary: 部门列表
+      parameters: [ { $ref: '#/components/parameters/Q' } ]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Department' }
+    post:
+      tags: [Orgs]
+      summary: 创建部门
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                parentId: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Department' }
+
+  /roles:
+    get:
+      tags: [Roles]
+      summary: 角色列表
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Role' }
+    post:
+      tags: [Roles]
+      summary: 创建角色
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                permissions: { type: array, items: { type: string } }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+
+  /users:
+    get:
+      tags: [Users]
+      summary: 用户分页列表
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Q' } ]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/User' } }
+    post:
+      tags: [Users]
+      summary: 创建用户
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, displayName]
+              properties:
+                username: { type: string }
+                displayName: { type: string }
+                email: { type: string }
+                phone: { type: string }
+                departmentId: { $ref: '#/components/schemas/UUID' }
+                roleIds: { type: array, items: { $ref: '#/components/schemas/UUID' } }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: 获取用户
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Users]
+      summary: 更新用户
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string }
+                email: { type: string }
+                phone: { type: string }
+                departmentId: { $ref: '#/components/schemas/UUID' }
+                roleIds: { type: array, items: { $ref: '#/components/schemas/UUID' } }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+    delete:
+      tags: [Users]
+      summary: 删除用户
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '204': { description: 已删除 }
+
+  /forms:
+    get:
+      tags: [Forms]
+      summary: 表单列表
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Form' }
+    post:
+      tags: [Forms]
+      summary: 创建表单
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, fields]
+              properties:
+                name: { type: string }
+                fields: { type: array, items: { $ref: '#/components/schemas/FormField' } }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Form' }
+
+  /forms/{id}:
+    get:
+      tags: [Forms]
+      summary: 获取表单
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Form' }
+    patch:
+      tags: [Forms]
+      summary: 更新表单
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                fields: { type: array, items: { $ref: '#/components/schemas/FormField' } }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Form' }
+
+  /processes:
+    get:
+      tags: [Processes]
+      summary: 流程定义列表
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProcessDefinition' }
+    post:
+      tags: [Processes]
+      summary: 创建流程定义
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, name]
+              properties:
+                key: { type: string }
+                name: { type: string }
+                formId: { $ref: '#/components/schemas/UUID' }
+                nodes: { type: array, items: { $ref: '#/components/schemas/ProcessNode' } }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProcessDefinition' }
+
+  /processes/{key}:
+    get:
+      tags: [Processes]
+      summary: 获取流程定义
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProcessDefinition' }
+    patch:
+      tags: [Processes]
+      summary: 更新流程定义
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                nodes: { type: array, items: { $ref: '#/components/schemas/ProcessNode' } }
+                status: { type: string, enum: [draft, published, archived] }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProcessDefinition' }
+
+  /requests:
+    get:
+      tags: [Requests]
+      summary: 审批请求列表
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Q' } ]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Request' } }
+    post:
+      tags: [Requests]
+      summary: 创建审批请求（草稿或直接提交）
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [processKey, formData]
+              properties:
+                processKey: { type: string }
+                title: { type: string }
+                formId: { $ref: '#/components/schemas/UUID' }
+                formData: { type: object, additionalProperties: true }
+                submit: { type: boolean, default: false }
+            examples:
+              submit-example:
+                summary: 直接提交
+                value:
+                  processKey: leave
+                  title: 年假申请
+                  formData: { days: 3, reason: 'Family travel' }
+                  submit: true
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Request' }
+
+  /requests/{id}:
+    get:
+      tags: [Requests]
+      summary: 获取审批请求
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Request' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Requests]
+      summary: 更新草稿（仅草稿态）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                formData: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Request' }
+
+  /requests/{id}/submit:
+    post:
+      tags: [Requests]
+      summary: 提交草稿
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: 已提交
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Request' }
+
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: 我的待办/已办
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, claimed, completed] }
+        - name: assignee
+          in: query
+          schema: { type: string, enum: [me, all] }
+          description: me 表示我的任务
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Task' } }
+
+  /tasks/{id}/claim:
+    post:
+      tags: [Tasks]
+      summary: 认领任务
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+
+  /tasks/{id}/complete:
+    post:
+      tags: [Tasks]
+      summary: 完成任务（通过/驳回/转交）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: { type: string, enum: [approve, reject, transfer] }
+                comment: { type: string }
+                transferToUserId: { $ref: '#/components/schemas/UUID' }
+            examples:
+              approve:
+                value: { action: approve, comment: 'Looks good' }
+              reject:
+                value: { action: reject, comment: 'Missing attachment' }
+      responses:
+        '200':
+          description: 已完成
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+
+  /requests/{id}/comments:
+    get:
+      tags: [Comments]
+      summary: 请求评论列表
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Comment' }
+    post:
+      tags: [Comments]
+      summary: 添加评论
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comment' }
+
+  /attachments:
+    post:
+      tags: [Attachments]
+      summary: 上传附件
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attachment' }
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: 我的通知
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' } ]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      summary: Webhook 列表
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Webhook' }
+    post:
+      tags: [Webhooks]
+      summary: 创建 Webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url: { type: string, format: uri }
+                events: { type: array, items: { type: string } }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Webhook' }
+
+  /audit-logs:
+    get:
+      tags: [Audit]
+      summary: 审计日志
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Q' } ]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/AuditLog' } }
+
+  /health:
+    get:
+      tags: [Health]
+      summary: 健康检查
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  time: { $ref: '#/components/schemas/DateTime' }
+              examples:
+                default:
+                  value: { status: OK, time: '2025-09-24T12:00:00Z' }
