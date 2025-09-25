@@ -28,7 +28,12 @@
       "store": "Skywalker",
       "storeName": "农家小炒肉",
       "productName": "商品通用门店...等3项",
-      "updateTime": "9/Jan/2025 19:20:20"
+      "updateTime": "9/Jan/2025 19:20:20",
+      "relatedStores": {
+        "count": 9,
+        "clickable": true,
+        "displayText": "9家"
+      }
     },
     "details": {
       "changeType": "变更重要程度",
@@ -56,6 +61,10 @@
 | data.orderInfo.storeName | string | 商品简称 |
 | data.orderInfo.productName | string | 商品名称 |
 | data.orderInfo.updateTime | string | 更新时间 |
+| data.orderInfo.relatedStores | object | 相关门店信息 |
+| data.orderInfo.relatedStores.count | int | 门店数量 |
+| data.orderInfo.relatedStores.clickable | boolean | 是否可点击查看详情 |
+| data.orderInfo.relatedStores.displayText | string | 显示文本 |
 | data.details | object | 详情信息 |
 | data.details.changeType | string | 变更类型 |
 | data.details.productStatus | string | 商品状态 |
@@ -95,6 +104,11 @@
       "businessAddress": "South Jakarta",
       "deliveryTime": "9家",
       "isDowngraded": true,
+      "relatedStores": {
+        "count": 9,
+        "clickable": true,
+        "displayText": "9家"
+      },
       "downgradeReason": "商品下架(多收有效门店亏失)",
       "updateBefore": "可用门店",
       "discountCategories": [
@@ -178,6 +192,10 @@
 | data.basicInfo.businessAddress | string | 商家地址 |
 | data.basicInfo.deliveryTime | string | 送达门店数 |
 | data.basicInfo.isDowngraded | boolean | 是否降级 |
+| data.basicInfo.relatedStores | object | 相关门店信息 |
+| data.basicInfo.relatedStores.count | int | 门店数量 |
+| data.basicInfo.relatedStores.clickable | boolean | 是否可点击查看详情 |
+| data.basicInfo.relatedStores.displayText | string | 显示文本 |
 | data.basicInfo.downgradeReason | string | 降级原因 |
 | data.basicInfo.updateBefore | string | 变更前状态 |
 | data.basicInfo.discountCategories | array | 折扣分类统计 |
@@ -321,6 +339,118 @@
 | data[].name | string | 门店名称 |
 | data[].address | string | 门店地址 |
 | data[].status | string | 门店状态 |
+
+## 5. 商品涉及门店列表接口
+
+### 接口信息
+- **接口名称**: 获取商品涉及的门店列表
+- **接口路径**: `/api/product/stores`
+- **请求方式**: GET
+- **接口描述**: 点击商品的涉及门店字段时，获取该商品相关的门店列表详情
+
+### 请求参数
+
+| 参数名 | 必选 | 类型 | 说明 |
+|--------|------|------|------|
+| productId | 是 | string | 商品ID |
+| type | 否 | string | 门店类型筛选(all/partial/full) |
+
+### 返回示例
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "summary": {
+      "totalStores": 9,
+      "activeStores": 9,
+      "partialStores": 3,
+      "fullStores": 6
+    },
+    "storeGroups": [
+      {
+        "groupName": "部分门店",
+        "groupType": "partial",
+        "count": 3,
+        "stores": [
+          {
+            "id": "KFC-前滩店",
+            "name": "KFC-前滩店",
+            "address": "浦东新区前滩大道",
+            "status": "active",
+            "discountRate": 20,
+            "availableProducts": 150
+          },
+          {
+            "id": "KFC-南山店", 
+            "name": "KFC-南山店",
+            "address": "深圳市南山区",
+            "status": "active",
+            "discountRate": 20,
+            "availableProducts": 120
+          },
+          {
+            "id": "KFC-前海店",
+            "name": "KFC-前海店",
+            "address": "深圳市前海新区",
+            "status": "active",
+            "discountRate": 20,
+            "availableProducts": 180
+          }
+        ]
+      },
+      {
+        "groupName": "全部门店",
+        "groupType": "full",
+        "count": 6,
+        "stores": [
+          {
+            "id": "KFC-前湾店",
+            "name": "KFC-前湾店",
+            "address": "浦东新区前湾路",
+            "status": "active",
+            "discountRate": 100,
+            "availableProducts": 300
+          },
+          {
+            "id": "KFC-世纪大道店",
+            "name": "KFC-世纪大道店",
+            "address": "浦东新区世纪大道",
+            "status": "active",
+            "discountRate": 100,
+            "availableProducts": 280
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 返回参数说明
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| code | int | 状态码 |
+| message | string | 返回信息 |
+| data | object | 数据对象 |
+| data.summary | object | 门店统计摘要 |
+| data.summary.totalStores | int | 总门店数 |
+| data.summary.activeStores | int | 活跃门店数 |
+| data.summary.partialStores | int | 部分上架门店数 |
+| data.summary.fullStores | int | 全部上架门店数 |
+| data.storeGroups | array | 门店分组列表 |
+| data.storeGroups[].groupName | string | 分组名称 |
+| data.storeGroups[].groupType | string | 分组类型(partial/full) |
+| data.storeGroups[].count | int | 该组门店数量 |
+| data.storeGroups[].stores | array | 门店列表 |
+| data.storeGroups[].stores[].id | string | 门店ID |
+| data.storeGroups[].stores[].name | string | 门店名称 |
+| data.storeGroups[].stores[].address | string | 门店地址 |
+| data.storeGroups[].stores[].status | string | 门店状态 |
+| data.storeGroups[].stores[].discountRate | int | 折扣率(百分比) |
+| data.storeGroups[].stores[].availableProducts | int | 可用商品数 |
 
 ## 状态码说明
 
