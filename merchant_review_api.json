@@ -1,0 +1,496 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "商品支更详情查询API",
+    "version": "1.0.0",
+    "description": "商品支更详情查询系统API文档"
+  },
+  "servers": [
+    {
+      "url": "https://api.example.com/v1",
+      "description": "生产环境"
+    }
+  ],
+  "paths": {
+    "/merchant-reviews": {
+      "get": {
+        "summary": "获取商品支更详情列表（查询预览卡片）",
+        "description": "获取商品支更详情的分页列表，支持多种筛选条件",
+        "tags": ["商品支更"],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页数量",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "开始日期 (YYYY-MM-DD)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "结束日期 (YYYY-MM-DD)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "reviewStatus",
+            "in": "query",
+            "description": "审核状态",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["全部", "待审核", "已通过", "不通过"]
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "description": "搜索关键词（可搜索商品名称、商家名称等）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "响应码",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "响应消息",
+                      "example": "success"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "description": "总数量",
+                          "example": 100
+                        },
+                        "page": {
+                          "type": "integer",
+                          "description": "当前页码",
+                          "example": 1
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "description": "每页数量",
+                          "example": 20
+                        },
+                        "list": {
+                          "type": "array",
+                          "description": "商品支更详情列表",
+                          "items": {
+                            "$ref": "#/components/schemas/MerchantReviewPreview"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/merchant-reviews/{id}": {
+      "get": {
+        "summary": "获取商品支更详情详细信息",
+        "description": "根据ID获取单个商品支更详情的完整信息",
+        "tags": ["商品支更"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "商品支更详情ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "响应码",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "响应消息",
+                      "example": "success"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/MerchantReviewDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "记录不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/merchant-reviews/{id}/approve": {
+      "put": {
+        "summary": "审核商品支更详情",
+        "description": "对商品支更详情进行审核操作",
+        "tags": ["商品支更"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "商品支更详情ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["通过", "不通过"],
+                    "description": "审核状态"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "审核备注（不通过时必填）"
+                  }
+                },
+                "required": ["status"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "审核成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "审核成功"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "记录不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "MerchantReviewPreview": {
+        "type": "object",
+        "description": "商品支更详情预览卡片",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "记录ID",
+            "example": "MRV9T512973"
+          },
+          "reviewStatus": {
+            "type": "string",
+            "description": "审核状态",
+            "enum": ["待审核", "已通过", "不通过"],
+            "example": "不通过"
+          },
+          "merchantName": {
+            "type": "string",
+            "description": "商家名称",
+            "example": "Skywalker"
+          },
+          "productName": {
+            "type": "string",
+            "description": "商品名称",
+            "example": "衣家小炒肉"
+          },
+          "categoryName": {
+            "type": "string",
+            "description": "商品品类名称",
+            "example": "商品使用门店...等3项"
+          },
+          "submitTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "提交时间",
+            "example": "2025-01-24T12:00:59.000Z"
+          },
+          "lastUpdateTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "最后更新时间",
+            "example": "2025-01-24T12:00:59.000Z"
+          }
+        },
+        "required": ["id", "reviewStatus", "merchantName", "productName", "submitTime"]
+      },
+      "MerchantReviewDetail": {
+        "type": "object",
+        "description": "商品支更详情完整信息",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "记录ID",
+            "example": "MRV9T512973"
+          },
+          "reviewStatus": {
+            "type": "string",
+            "description": "审核状态",
+            "enum": ["待审核", "已通过", "不通过"],
+            "example": "不通过"
+          },
+          "applicant": {
+            "type": "string",
+            "description": "申请人",
+            "example": "Mkt(V9T512973)"
+          },
+          "submitTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "申请时间",
+            "example": "2025-01-24T12:00:59.000Z"
+          },
+          "lastUpdateTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "受理提交时间",
+            "example": "2025-01-24T12:00:59.000Z"
+          },
+          "businessLocation": {
+            "type": "string",
+            "description": "商家名称",
+            "example": "JAn South Jakarta"
+          },
+          "businessCode": {
+            "type": "string",
+            "description": "商家ID",
+            "example": "892850453985403"
+          },
+          "businessArea": {
+            "type": "string",
+            "description": "商家名称",
+            "example": "South Jakarta"
+          },
+          "reviewScore": {
+            "type": "integer",
+            "description": "评级分值(满分100分)",
+            "example": 9,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "categories": {
+            "type": "array",
+            "description": "受影响分类",
+            "items": {
+              "type": "object",
+              "properties": {
+                "categoryName": {
+                  "type": "string",
+                  "description": "分类名称",
+                  "example": "商品下架"
+                },
+                "score": {
+                  "type": "integer",
+                  "description": "评分",
+                  "example": 20
+                }
+              }
+            }
+          },
+          "stores": {
+            "type": "array",
+            "description": "查看门店列表",
+            "items": {
+              "type": "object",
+              "properties": {
+                "storeName": {
+                  "type": "string",
+                  "description": "门店名称",
+                  "example": "KFC前海店"
+                },
+                "storeId": {
+                  "type": "string",
+                  "description": "门店ID"
+                }
+              }
+            }
+          },
+          "reviewHistory": {
+            "type": "array",
+            "description": "审核历史",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reviewTime": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "审核时间"
+                },
+                "reviewer": {
+                  "type": "string",
+                  "description": "审核人"
+                },
+                "reviewResult": {
+                  "type": "string",
+                  "description": "审核结果"
+                },
+                "reviewComment": {
+                  "type": "string",
+                  "description": "审核备注"
+                }
+              }
+            }
+          }
+        },
+        "required": ["id", "reviewStatus", "applicant", "submitTime", "businessLocation", "businessCode"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "错误响应",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "错误码",
+            "example": 400
+          },
+          "message": {
+            "type": "string",
+            "description": "错误消息",
+            "example": "请求参数错误"
+          },
+          "details": {
+            "type": "string",
+            "description": "详细错误信息",
+            "example": "缺少必要的请求参数"
+          }
+        },
+        "required": ["code", "message"]
+      }
+    }
+  }
+}
